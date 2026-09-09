@@ -1,132 +1,155 @@
-import customtkinter as ctk
-import threading
-import time
-import math
-import socket
-import urllib.request
-import json
-import sqlite3
-import random
+import sys
+import gi
+import os
+gi.require_version('Gtk', '3.0')
+from gi.repository import Gtk, Gdk, GLib, Pango
 
-ctk.set_appearance_mode("dark")
-
-class App(ctk.CTk):
+class ZeroPPT(Gtk.Window):
     def __init__(self):
-        super().__init__()
-        self.title("Presentation Studio")
-        self.geometry("1100x750")
+        super().__init__(title="Zero PPT - Ultimate Studio")
+        self.set_default_size(1300, 800)
         
-        # Premium Enterprise Color Palette
-        self.bg_color = "#0B0C10"          # Deep rich black/gray
-        self.sidebar_color = "#1F2833"     # Slate gray sidebar
-        self.accent_color = "#66FCF1"      # Neon cyan accent
-        self.text_primary = "#FFFFFF"      # Crisp white
-        self.text_secondary = "#C5C6C7"    # Soft gray text
-        self.panel_bg = "#161920"          # Slightly raised panel
+        self.header = Gtk.HeaderBar()
+        self.header.set_show_close_button(True)
+        self.header.props.title = ""
+        self.header.get_style_context().add_class("hidden-header")
+        self.set_titlebar(self.header)
         
-        self.configure(fg_color=self.bg_color)
+        self.setup_css()
         
-        self.grid_rowconfigure(0, weight=1)
-        self.grid_columnconfigure(1, weight=1)
+        main_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
+        self.add(main_box)
         
-        # Sidebar Navigation
-        self.sidebar = ctk.CTkFrame(self, width=240, corner_radius=0, fg_color=self.sidebar_color)
-        self.sidebar.grid(row=0, column=0, sticky="nsew")
-        self.sidebar.grid_rowconfigure(5, weight=1)
+        # ================= LEFT PANEL (Thumbnails) =================
+        self.panel_left = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        self.panel_left.set_size_request(220, -1)
+        self.panel_left.get_style_context().add_class("panel-side")
+        main_box.pack_start(self.panel_left, False, False, 0)
         
-        # Branding
-        self.logo_label = ctk.CTkLabel(self.sidebar, text="PPT", font=ctk.CTkFont("Segoe UI", size=26, weight="bold"), text_color=self.accent_color)
-        self.logo_label.grid(row=0, column=0, padx=25, pady=(35, 5), sticky="w")
+        logo = Gtk.Label(label="Z E R O P P T")
+        logo.get_style_context().add_class("logo")
+        logo.set_margin_top(20)
+        logo.set_margin_bottom(20)
+        self.panel_left.pack_start(logo, False, False, 0)
         
-        self.version_label = ctk.CTkLabel(self.sidebar, text="Enterprise Edition v8.5", font=ctk.CTkFont("Segoe UI", size=12), text_color=self.text_secondary)
-        self.version_label.grid(row=1, column=0, padx=25, pady=(0, 35), sticky="w")
+        btn_new_slide = Gtk.Button(label="➕ Add Slide")
+        btn_new_slide.get_style_context().add_class("action-btn")
+        self.panel_left.pack_start(btn_new_slide, False, False, 10)
         
-        # Nav Buttons
-        self.btn_dash = ctk.CTkButton(self.sidebar, text="  Overview", font=ctk.CTkFont("Segoe UI", size=14, weight="bold"), fg_color=self.panel_bg, text_color=self.text_primary, anchor="w", hover_color=self.accent_color)
-        self.btn_dash.grid(row=2, column=0, padx=15, pady=8, sticky="ew")
-        
-        self.btn_set = ctk.CTkButton(self.sidebar, text="  Configuration", font=ctk.CTkFont("Segoe UI", size=14), fg_color="transparent", text_color=self.text_secondary, anchor="w", hover_color=self.panel_bg)
-        self.btn_set.grid(row=3, column=0, padx=15, pady=8, sticky="ew")
-        
-        self.btn_logs = ctk.CTkButton(self.sidebar, text="  Diagnostics", font=ctk.CTkFont("Segoe UI", size=14), fg_color="transparent", text_color=self.text_secondary, anchor="w", hover_color=self.panel_bg)
-        self.btn_logs.grid(row=4, column=0, padx=15, pady=8, sticky="ew")
-        
-        # Main Work Area
-        self.main_view = ctk.CTkFrame(self, fg_color=self.bg_color, corner_radius=0)
-        self.main_view.grid(row=0, column=1, sticky="nsew", padx=30, pady=30)
-        
-        self.header = ctk.CTkLabel(self.main_view, text="Presentation Studio", font=ctk.CTkFont("Segoe UI", size=32, weight="bold"), text_color=self.text_primary)
-        self.header.pack(anchor="w", pady=(0, 20))
-        
-        # Premium Content Glass Panel
-        self.main_frame = ctk.CTkFrame(self.main_view, fg_color=self.panel_bg, corner_radius=15, border_width=1, border_color="#2A2F3A")
-        self.main_frame.pack(fill=ctk.BOTH, expand=True)
-        
-        self.setup_ui()
-        
-    
-    def setup_ui(self):
-        self.slides = [{"title": "Executive Summary", "content": "- Q4 Revenue Growth\n- Market Expansion\n- Risk Analysis"}]
-        self.current_idx = 0
-        
-        top_bar = ctk.CTkFrame(self.main_frame, fg_color="transparent")
-        top_bar.pack(fill=ctk.X, padx=25, pady=25)
-        
-        self.title_var = ctk.StringVar(value=self.slides[0]["title"])
-        self.title_entry = ctk.CTkEntry(top_bar, textvariable=self.title_var, font=ctk.CTkFont("Segoe UI", 28, "bold"), fg_color="transparent", border_width=0, text_color=self.text_primary)
-        self.title_entry.pack(side=ctk.LEFT, fill=ctk.X, expand=True)
-        
-        self.status = ctk.CTkLabel(top_bar, text="Slide 1 of 1", font=ctk.CTkFont(size=14), text_color=self.text_secondary)
-        self.status.pack(side=ctk.RIGHT)
-        
-        # Content Editor
-        self.content_box = ctk.CTkTextbox(self.main_frame, font=ctk.CTkFont("Segoe UI", 18), fg_color="#101217", text_color=self.text_secondary, corner_radius=10, border_width=1, border_color="#2A2F3A")
-        self.content_box.pack(fill=ctk.BOTH, expand=True, padx=25, pady=(0, 25))
-        self.content_box.insert("0.0", self.slides[0]["content"])
-        
-        # Toolbar Bottom
-        btn_frame = ctk.CTkFrame(self.main_frame, fg_color="transparent")
-        btn_frame.pack(fill=ctk.X, padx=25, pady=(0, 25))
-        
-        btn_kwargs = {"font": ctk.CTkFont(weight="bold"), "corner_radius": 8, "height": 36}
-        
-        ctk.CTkButton(btn_frame, text="◀ Previous", fg_color=self.sidebar_color, hover_color=self.panel_bg, command=self.prev, **btn_kwargs).pack(side=ctk.LEFT, padx=(0, 10))
-        ctk.CTkButton(btn_frame, text="Next ▶", fg_color=self.sidebar_color, hover_color=self.panel_bg, command=self.next, **btn_kwargs).pack(side=ctk.LEFT)
-        
-        ctk.CTkButton(btn_frame, text="💾 Save Changes", fg_color=self.accent_color, text_color="#000000", hover_color="#45A29E", command=self.save_slide, **btn_kwargs).pack(side=ctk.RIGHT)
-        ctk.CTkButton(btn_frame, text="✚ New Slide", fg_color="transparent", border_width=1, border_color=self.accent_color, text_color=self.accent_color, hover_color=self.sidebar_color, command=self.new_slide, **btn_kwargs).pack(side=ctk.RIGHT, padx=10)
-        
-    def save_slide(self):
-        self.slides[self.current_idx]["title"] = self.title_var.get()
-        self.slides[self.current_idx]["content"] = self.content_box.get("0.0", "end")
-        self.header.configure(text="Presentation Studio - (Saved)")
-        
-    def load_slide(self):
-        self.title_var.set(self.slides[self.current_idx]["title"])
-        self.content_box.delete("0.0", "end")
-        self.content_box.insert("0.0", self.slides[self.current_idx]["content"])
-        self.status.configure(text=f"Slide {self.current_idx + 1} of {len(self.slides)}")
-        self.header.configure(text="Presentation Studio")
-        
-    def prev(self):
-        self.save_slide()
-        if self.current_idx > 0:
-            self.current_idx -= 1
-            self.load_slide()
+        for i in range(1, 4):
+            thumb = Gtk.Box()
+            thumb.set_size_request(180, 100)
+            thumb.get_style_context().add_class("thumbnail")
+            if i == 1:
+                thumb.get_style_context().add_class("thumb-selected")
+            lbl = Gtk.Label(label=f"Slide {i}")
+            lbl.set_margin_start(10)
+            lbl.set_margin_top(10)
+            lbl.set_halign(Gtk.Align.START)
+            lbl.set_valign(Gtk.Align.START)
+            thumb.add(lbl)
             
-    def next(self):
-        self.save_slide()
-        if self.current_idx < len(self.slides) - 1:
-            self.current_idx += 1
-            self.load_slide()
+            align = Gtk.Alignment.new(0.5, 0, 0, 0)
+            align.set_padding(10, 10, 0, 0)
+            align.add(thumb)
+            self.panel_left.pack_start(align, False, False, 0)
             
-    def new_slide(self):
-        self.save_slide()
-        self.slides.append({"title": "Untitled Slide", "content": "• New point..."})
-        self.current_idx = len(self.slides) - 1
-        self.load_slide()
-
+        # ================= WORKSPACE (Slide Canvas) =================
+        self.workspace = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        self.workspace.get_style_context().add_class("workspace")
+        main_box.pack_start(self.workspace, True, True, 0)
+        
+        top_bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        top_bar.get_style_context().add_class("top-bar")
+        self.workspace.pack_start(top_bar, False, False, 0)
+        
+        btn_play = Gtk.Button(label="▶️ Present")
+        btn_play.get_style_context().add_class("play-btn")
+        top_bar.pack_end(btn_play, False, False, 10)
+        
+        align_slide = Gtk.Alignment.new(0.5, 0.5, 0, 0)
+        self.slide = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        self.slide.set_size_request(800, 450)
+        self.slide.get_style_context().add_class("main-slide")
+        
+        s_title = Gtk.Label(label="Ultimate Studio Vision")
+        s_title.get_style_context().add_class("slide-title")
+        s_title.set_halign(Gtk.Align.CENTER)
+        s_title.set_margin_top(150)
+        
+        s_sub = Gtk.Label(label="Reinventing the way we present.")
+        s_sub.get_style_context().add_class("slide-sub")
+        s_sub.set_halign(Gtk.Align.CENTER)
+        s_sub.set_margin_top(20)
+        
+        self.slide.pack_start(s_title, False, False, 0)
+        self.slide.pack_start(s_sub, False, False, 0)
+        align_slide.add(self.slide)
+        self.workspace.pack_start(align_slide, True, True, 0)
+        
+        # ================= RIGHT PANEL (Properties) =================
+        self.panel_right = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        self.panel_right.set_size_request(260, -1)
+        self.panel_right.get_style_context().add_class("panel-side")
+        main_box.pack_start(self.panel_right, False, False, 0)
+        
+        l_props = Gtk.Label(label="ANIMATION")
+        l_props.get_style_context().add_class("section-label")
+        l_props.set_halign(Gtk.Align.START)
+        l_props.set_margin_start(20)
+        l_props.set_margin_top(20)
+        self.panel_right.pack_start(l_props, False, False, 10)
+        
+        props = [
+            ("Transition", "Magic Move"),
+            ("Duration", "1.5s"),
+            ("Easing", "Ease In/Out")
+        ]
+        
+        for name, val in props:
+            vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+            vbox.set_margin_start(20)
+            vbox.set_margin_end(20)
+            vbox.set_margin_bottom(15)
+            
+            ln = Gtk.Label(label=name)
+            ln.get_style_context().add_class("prop-lbl")
+            ln.set_halign(Gtk.Align.START)
+            
+            entry = Gtk.Entry()
+            entry.set_text(val)
+            entry.get_style_context().add_class("prop-entry")
+            
+            vbox.pack_start(ln, False, False, 5)
+            vbox.pack_start(entry, False, False, 0)
+            self.panel_right.pack_start(vbox, False, False, 0)
+            
+    def setup_css(self):
+        css = b'''
+            window { background-color: #030305; }
+            .hidden-header { background: #030305; min-height: 0px; padding: 0px; border: none; box-shadow: none; }
+            .panel-side { background-color: rgba(10, 12, 18, 0.98); border-right: 1px solid rgba(255, 255, 255, 0.05); border-left: 1px solid rgba(255, 255, 255, 0.05); }
+            .logo { color: #FFFFFF; font-size: 18px; font-weight: 900; letter-spacing: 3px; text-shadow: 0 0 15px rgba(255, 102, 0, 0.6); }
+            .action-btn { background: rgba(255,255,255,0.05); color: #FFFFFF; border-radius: 8px; border: none; padding: 10px; margin: 0 20px; transition: all 0.2s; font-weight: bold; }
+            .action-btn:hover { background: rgba(255,255,255,0.1); }
+            .thumbnail { background-color: #111111; border: 2px solid transparent; border-radius: 8px; color: #888888; }
+            .thumb-selected { border: 2px solid #FF6600; color: #FFFFFF; }
+            .workspace { background: #1C1C1E; }
+            .top-bar { background: transparent; padding: 15px; }
+            .play-btn { background: linear-gradient(45deg, #FF6600, #FF3300); color: #FFFFFF; font-weight: bold; border: none; border-radius: 8px; padding: 8px 15px; box-shadow: 0 5px 15px rgba(255, 102, 0, 0.3); }
+            .main-slide { background: radial-gradient(circle at center, #2A2A2D, #1C1C1E); border-radius: 12px; box-shadow: 0 20px 50px rgba(0,0,0,0.8); border: 1px solid rgba(255,255,255,0.1); }
+            .slide-title { color: #FFFFFF; font-size: 48px; font-weight: bold; text-shadow: 0 5px 15px rgba(0,0,0,0.5); }
+            .slide-sub { color: #FF6600; font-size: 24px; }
+            .section-label { color: #4A5568; font-size: 11px; font-weight: 900; letter-spacing: 2px; }
+            .prop-lbl { color: #8B94A5; font-size: 13px; font-weight: bold; }
+            .prop-entry { background: #0A0D14; color: #FFFFFF; border: 1px solid #1C2333; border-radius: 8px; padding: 8px; }
+        '''
+        provider = Gtk.CssProvider()
+        provider.load_from_data(css)
+        Gtk.StyleContext.add_provider_for_screen(Gdk.Screen.get_default(), provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
 
 if __name__ == "__main__":
-    app = App()
-    app.mainloop()
+    win = ZeroPPT()
+    win.connect("destroy", Gtk.main_quit)
+    win.show_all()
+    Gtk.main()
